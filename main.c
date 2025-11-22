@@ -1,4 +1,4 @@
 #include<stdio.h>
 int main(){
-printf("we");
+printf("welcome to This Calculator\n");
 }
