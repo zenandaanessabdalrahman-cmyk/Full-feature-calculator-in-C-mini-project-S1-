@@ -121,5 +121,3 @@ If you want to modify the code:
   * **`mylib.h`**: The bridge between the Brain and the Body.
 
 <!-- end list -->
-
-```
