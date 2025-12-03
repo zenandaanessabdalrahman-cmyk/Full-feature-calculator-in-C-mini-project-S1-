@@ -1,322 +1,158 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <math.h>
+#include <string.h>
 #include "mylib.h"
 
-int add(int a, int b) {
-    return a + b;
+const char *expression_ptr;
+double global_last_answer = 0.0; 
+
+void set_last_answer(double val) {
+    global_last_answer = val;
 }
 
-int subtract(int a, int b) {
-    return a - b;
+double factorial_calc(double n) {
+    if (n < 0 || n != floor(n)) return NAN; 
+    if (n == 0) return 1;
+    double res = 1;
+    for (int i = 1; i <= (int)n; i++) {
+        res *= i;
+        if (isinf(res)) return res; 
+    }
+    return res;
 }
 
-int divide(int a, int b) {
-    if (b == 0) {
-        printf("Error: Division by zero\n");
-        return 0;
-    }
-    return a / b;
+// --- PROTOTYPES ---
+double parse_expression();
+double parse_term();
+double parse_factor();
+double parse_power();
+double parse_number();
+
+double evaluate_expression(const char *expression) {
+    expression_ptr = expression;
+    return parse_expression();
 }
 
-int modulus(int a, int b) {
-    if (b == 0) {
-        printf("Error: Division by zero\n");
-        return 0;
-    }
-    return a % b;
-}
-
-int pow_int(int base, int exp) {
-    if (exp < 0) {
-        printf("Error: Negative exponent not supported in pow_int\n");
-        return 0;
-    }
-    int result = 1;
-    int i = 0;
-    while (i < exp) {
-        result = result * base;
-        i = i + 1;
-    }
-    return result;
-}
-
-int factorial(int n) {
-    if (n < 0) {
-        printf("Error: Factorial of negative number\n");
-        return -1;
-    }
-    int result = 1;
-    int i = 1;
-    while (i <= n) {
-        result = result * i;
-        i = i + 1;
+double parse_expression() {
+    double result = parse_term();
+    while (*expression_ptr == '+' || *expression_ptr == '-') {
+        char op = *expression_ptr;
+        expression_ptr++;
+        if (op == '+') result += parse_term();
+        else result -= parse_term();
     }
     return result;
 }
 
-int gcd(int a, int b) {
-    a = abs_val(a);
-    b = abs_val(b);
-    while (b != 0) {
-        int temp = b;
-        b = a % b;
-        a = temp;
-    }
-    return a;
-}
-
-int lcm(int a, int b) {
-    if (a == 0 || b == 0) return 0;
-    int divisor = gcd(a, b);
-    return (a / divisor) * b;  
-}
-
-int max(int a, int b) {
-    return (a > b) ? a : b;
-}
-
-int min(int a, int b) {
-    return (a < b) ? a : b;
-}
-
-int abs_val(int a) {
-    return (a < 0) ? -a : a;
-}
-
-int square(int a) {
-    return a * a;
-}
-
-int cube(int a) {
-    return a * a * a;
-}
-
-int sqrt_int(int a) {
-    if (a < 0) {
-        printf("Error: Square root of negative number\n");
-        return -1;
-    }
-    int result = 0;
-    while (result * result <= a) {
-        result++;
-    }
-    return result - 1;
-}
-
-int log_int(int a, int base) {
-    if (a <= 0 || base <= 1) {
-        printf("Error: Invalid input for logarithm\n");
-        return -1;
-    }
-    int result = 0;
-    int power = 1;
-    while (power <= a) {
-        power = power * base;
-        result++;
-    }
-    return result - 1;
-}
-
-float fabs_val(float x) {
-    return (x < 0.0f) ? -x : x;
-}
-
-#define PI 3.14159265358979323846f
-
-float sin_int(int degrees) {
-    float radians = degrees * PI / 180.0f;
-    float term = radians;
-    float sum = term;
-    int n = 1;
-    while (n < 10) {
-        term = -term * radians * radians / ((2 * n) * (2 * n + 1));
-        sum += term;
-        n++;
-    }
-    return sum;
-}
-
-float cos_int(int degrees) {
-    float radians = degrees * PI / 180.0f;
-    float term = 1.0f;
-    float sum = term;
-    int n = 1;
-    while (n < 10) {
-        term = -term * radians * radians / ((2 * n - 1) * (2 * n));
-        sum += term;
-        n++;
-    }
-    return sum;
-}
-
-float tan_int(int degrees) {
-    float cosine = cos_int(degrees);
-    if (fabs_val(cosine) < 0.0001f) {
-        printf("Error: Tangent undefined for this angle\n");
-        return 0.0f;
-    }
-    return sin_int(degrees) / cosine;
-}
-
-float loge_approx(float a) {
-    if (a <= 0.0f) {
-        printf("Error: Natural log undefined for non-positive input\n");
-        return -1.0f;
-    }
-    float x = a - 1.0f;
-    if (x <= -1.0f || x >= 1.0f) {
-        printf("Warning: loge_approx is inaccurate for this input\n");
-    }
-    float result = 0.0f;
-    float term = x;
-    int n = 1;
-    while (n < 50) {
-        if (n % 2 == 1)
-            result += term / n;
-        else
-            result -= term / n;
-        term *= x;
-        n++;
-    }
-    return result;
-}
-
-float exp_float(float x) {
-    float result = 1.0f;
-    float term = 1.0f;
-    int n = 1;
-    while (n < 100) {
-        term = term * x / n;
-        result += term;
-        n++;
-    }
-    return result;
-}
-
-float sqrt_float(float a) {
-    if (a < 0.0f) {
-        printf("Error: Square root of negative number\n");
-        return -1.0f;
-    }
-    if (a == 0.0f) return 0.0f;
-    float guess = a / 2.0f;
-    float epsilon = 0.00001f;
+// --- UPDATED: HANDLES IMPLICIT MULTIPLICATION ---
+double parse_term() {
+    double result = parse_factor();
+    
     while (1) {
-        float next_guess = (guess + a / guess) / 2.0f;
-        if (fabs_val(next_guess - guess) < epsilon) {
-            return next_guess;
-        }
-        guess = next_guess;
-    }
-}
+        // Skip whitespace to see what is next
+        while (isspace(*expression_ptr)) expression_ptr++;
 
-float pow_float(float base, int exp) {
-    if (exp < 0) {
-        printf("Error: Negative exponent not supported in pow_float\n");
-        return 0.0f;
-    }
-    float result = 1.0f;
-    int i = 0;
-    while (i < exp) {
-        result *= base;
-        i++;
+        if (*expression_ptr == '*' || *expression_ptr == '/') {
+            // Explicit Multiplication/Division
+            char op = *expression_ptr;
+            expression_ptr++;
+            if (op == '*') result *= parse_factor();
+            else {
+                double divisor = parse_factor();
+                if (divisor != 0.0) result /= divisor;
+                else result = NAN; 
+            }
+        }
+        // Implicit Multiplication Check
+        // If next char is '(', a Letter (pi/sin), or the symbol 'π' -> Multiply!
+        else if (*expression_ptr == '(' || isalpha(*expression_ptr) || strncmp(expression_ptr, "π", 2) == 0) {
+            result *= parse_factor();
+        }
+        else {
+            break; // No more multiplication terms
+        }
     }
     return result;
 }
 
-float divide_float(float a, float b) {
-    if (fabs_val(b) < 0.00001f) {
-        printf("Error: Division by zero\n");
-        return 0.0f;
+double parse_factor() {
+    double result = parse_power();
+    while (*expression_ptr == '^') {
+        expression_ptr++;
+        double exponent = parse_factor(); 
+        result = pow(result, exponent);
     }
-    return a / b;
+    return result;
 }
 
-float modulus_float(float a, float b) {
-    if (fabs_val(b) < 0.00001f) {
-        printf("Error: Division by zero\n");
-        return 0.0f;
+double parse_power() {
+    double result = parse_number();
+    // Handle Factorial (!)
+    while (*expression_ptr == '!') {
+        expression_ptr++;
+        result = factorial_calc(result);
     }
-   
-    float aa = fabs_val(a);
-    float bb = fabs_val(b);
-    while (aa >= bb) {
-        aa -= bb;
-    }
-    return (a < 0) ? -aa : aa;
+    return result;
 }
 
+double parse_number() {
+    double result = 0.0;
+    while (isspace(*expression_ptr)) expression_ptr++;
 
-float degrees_to_radians(float deg) {
-    return deg * 3.14159f / 180.0f;
-}
-
-float radians_to_degrees(float rad) {
-    return rad * 180.0f / 3.14159f;
-}
-
-
-int cbrt_int(int a) {
-    if (a == 0) return 0;
-    int negative = 0;
-    if (a < 0) {
-        negative = 1;
-        a = -a;
+    if (*expression_ptr == '(') {
+        expression_ptr++;
+        result = parse_expression();
+        if (*expression_ptr == ')') expression_ptr++;
+        return result;
     }
-    int guess = 1;
-    while (guess * guess * guess <= a) {
-        guess = guess + 1;
-    }
-    guess = guess - 1;
-    if (negative) {
-        return -guess;
-    } else {
-        return guess;
-    }
-}
 
-float cbrt_float(float a) {
-    if (a == 0.0f) return 0.0f;
-    int negative = 0;
-    if (a < 0.0f) {
-        negative = 1;
-        a = -a;
+    if (strncmp(expression_ptr, "π", 2) == 0) {
+        expression_ptr += 2; 
+        return M_PI;
     }
-    float guess = a / 3.0f;
-    float epsilon = 0.00001f;
-    while (1) {
-        float cube = guess * guess * guess;
-        if (cube > a) {
-            guess = guess - (cube - a) / (3 * guess * guess + 0.0001f);
-        } else {
-            guess = guess + (a - cube) / (3 * guess * guess + 0.0001f);
+
+    if (isalpha(*expression_ptr)) {
+        char name[10] = {0};
+        int i = 0;
+        while (isalpha(*expression_ptr) && i < 9) {
+            name[i++] = *expression_ptr++;
         }
-        if (guess * guess * guess > a - epsilon && guess * guess * guess < a + epsilon) {
-            break;
-        }
-    }
-    if (negative) {
-        return -guess;
-    } else {
-        return guess;
-    }
-}
+        
+        if (strcmp(name, "pi") == 0) return M_PI; 
+        if (strcmp(name, "e") == 0) return M_E;
+        if (strcmp(name, "ANS") == 0 || strcmp(name, "ans") == 0) return global_last_answer;
 
-int is_prime(int n) {
-    if (n < 2) {
-        return 0;
-    }
-    if (n == 2) {
-        return 1;
-    }
-    if (n % 2 == 0) {
-        return 0;  
-    }
-    int i = 3;
-    while (i * i <= n) {
-        if (n % i == 0) {
-            return 0;
+        if (*expression_ptr == '(') {
+            expression_ptr++;
+            double val = parse_expression();
+            if (*expression_ptr == ')') expression_ptr++;
+            
+            if (strcmp(name, "sin") == 0) return sin(val);
+            if (strcmp(name, "cos") == 0) return cos(val);
+            
+            if (strcmp(name, "tan") == 0) {
+                double t = tan(val);
+                if (fabs(t) > 1e15) return NAN; 
+                return t;
+            }
+
+            if (strcmp(name, "acos") == 0) return acos(val);
+            if (strcmp(name, "asin") == 0) return asin(val);
+            if (strcmp(name, "atan") == 0) return atan(val);
+            if (strcmp(name, "sqrt") == 0) return sqrt(val);
+            if (strcmp(name, "log") == 0) return log10(val);
+            if (strcmp(name, "ln") == 0) return log(val);
+            if (strcmp(name, "exp") == 0) return exp(val);
         }
-        i = i + 2;
+        return 0.0;
     }
-    return 1;
+
+    char *end_ptr;
+    result = strtod(expression_ptr, &end_ptr);
+    if (expression_ptr == end_ptr) return 0.0;
+    expression_ptr = end_ptr;
+
+    return result;
 }
