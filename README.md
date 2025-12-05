@@ -1,6 +1,5 @@
 Here is the raw source code for your **README.md**. You can copy this entire block and paste it directly into the file on GitHub.
 
-````markdown
 # 🧮 Scalc - Cross-Platform Scientific Calculator
 
 **Mini Project 1CPS1**
