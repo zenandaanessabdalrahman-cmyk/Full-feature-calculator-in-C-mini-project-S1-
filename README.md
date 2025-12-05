@@ -2,11 +2,11 @@
 
 **Mini Project 1CPS1**
 
-**Scalc** is a powerful scientific calculator built in C. It features a unique **dual-interface architecture**:
-1.  **Linux TUI:** A keyboard-driven, cyberpunk-themed terminal interface.
+**Scalc** is a powerful scientific calculator built in C. It demonstrates code portability by featuring a unique **dual-interface architecture**:
+1.  **Linux TUI:** A keyboard-driven, cyberpunk-themed terminal interface using Ncurses.
 2.  **Windows GUI:** A native, mouse-driven Win32 application.
 
-Both interfaces run on the exact same logic engine (`mylib.c`), ensuring consistent precision across platforms.
+Both interfaces run on the exact same logic engine (`mylib.c`), ensuring consistent precision, parsing, and error handling across platforms.
 
 ---
 
@@ -16,7 +16,9 @@ Both interfaces run on the exact same logic engine (`mylib.c`), ensuring consist
 
 **Prerequisites:**
 * GCC Compiler
-* Ncurses Library (`sudo pacman -S ncurses` or `sudo apt install libncurses5-dev`)
+* Ncurses Library
+    * Arch Linux: `sudo pacman -S ncurses`
+    * Debian/Ubuntu: `sudo apt install libncurses5-dev libncursesw5-dev`
 
 **Build Command:**
 ```bash
