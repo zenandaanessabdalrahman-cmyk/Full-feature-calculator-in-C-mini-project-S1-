@@ -1,234 +1,307 @@
 #include <ncurses.h>
 #include <string.h>
-#include <math.h> 
-#include <locale.h> 
+#include <stdlib.h>
 #include <ctype.h>
-#include <stdlib.h> 
 #include "mylib.h"
+#include <locale.h> 
 
 #define ROWS 8
-#define COLS 4
-#define MAX_VAL 1000000000000000.0 
+#define COLS 6
 
-// Updated Button Layout: "DEL" -> "!"
-char *buttons[ROWS][COLS] = {
-    {"C",    "(",    ")",    "!"},   // Added Factorial here
-    {"sin",  "cos",  "tan",  "^"},
-    {"asin", "acos", "atan", "sqrt"},
-    {"log",  "ln",   "π",    "/"},
-    {"7",    "8",    "9",    "*"},
-    {"4",    "5",    "6",    "-"},
-    {"1",    "2",    "3",    "+"},
-    {"0",    ".",    "ANS",  "="} 
+// updated grid layout
+char *calc_buttons[ROWS][COLS] = {
+    {"SOLVE", "EXIT",  "C",    "DEL",  "(",    ")"},
+    {"sin",   "asin",  "sinh", "cosh", "^",    "!"},
+    {"cos",   "acos",  "tanh", "abs",  "nRt",  "/"},
+    {"tan",   "atan",  "log",  "ln",   "e",    "*"},
+    {"7",     "8",     "9",    "mod",  "π",    "-"},
+    {"4",     "5",     "6",    "sqr",  "10^x", "+"},
+    {"1",     "2",     "3",    "inv",  "ANS",  "="},
+    {"0",     ".",     "i",    "F<>D", "DRG",  ""} 
 };
 
 char input_buffer[256] = {0};
 int result_is_displayed = 0; 
+int current_mode = 0; 
+int menu_sel = 0; 
 
-void init_colors() {
+char *menu_options[] = {
+    "1. Linear Equation (ax + b = 0)",
+    "2. Quadratic Equation (ax^2 + bx + c = 0)",
+    "3. Cubic Equation (ax^3 + ... + d = 0)",
+    "4. Convert Degrees -> Radians (as factor of π)",
+    "5. Convert Radians -> Degrees",
+    "6. Back to Calculator"
+};
+
+void init_theme() {
     start_color();
-    // Pair 1: Text(Cyan) on Background(Black)
-    init_pair(1, COLOR_CYAN, COLOR_BLACK);
-    // Pair 2: Selected Item (Black Text on Cyan Background)
-    init_pair(2, COLOR_BLACK, COLOR_CYAN);
-    // Pair 3: Error Red
-    init_pair(3, COLOR_RED, COLOR_BLACK);
+    // simple theme black and white
+    init_pair(1, COLOR_WHITE, COLOR_BLACK);
+    // inverted for selection
+    init_pair(2, COLOR_BLACK, COLOR_WHITE);
 }
 
-void draw_calculator(int selected_row, int selected_col) {
-    clear();
-    int height, width;
-    getmaxyx(stdscr, height, width);
+void draw_button_box(int y, int x, int h, int w, char *label, int is_sel) {
+    mvhline(y, x, ACS_HLINE, w);       
+    mvhline(y + h - 1, x, ACS_HLINE, w); 
+    mvvline(y, x, ACS_VLINE, h);       
+    mvvline(y, x + w - 1, ACS_VLINE, h); 
+    mvaddch(y, x, ACS_ULCORNER);
+    mvaddch(y, x + w - 1, ACS_URCORNER);
+    mvaddch(y + h - 1, x, ACS_LLCORNER);
+    mvaddch(y + h - 1, x + w - 1, ACS_LRCORNER);
 
-    int start_y = (height - 24) / 2;
-    int start_x = (width - 50) / 2;
+    if (is_sel) attron(A_REVERSE);
+
+    for (int i = 1; i < h - 1; i++) {
+        mvhline(y + i, x + 1, ' ', w - 2);
+    }
+
+    int v_len = strlen(label);
+    if (strcmp(label, "π") == 0) v_len = 1;
+    if (strchr(label, -61)) v_len--; 
     
-    // Draw Title with Color
-    attron(COLOR_PAIR(1) | A_BOLD);
-    mvprintw(start_y - 2, start_x, "SCALC SCIENTIFIC GUI");
-    attroff(COLOR_PAIR(1) | A_BOLD);
+    int pad = (w - 2 - v_len) / 2;
+    mvprintw(y + (h/2), x + 1 + pad, "%s", label);
 
-    // Input Window Box
-    attron(COLOR_PAIR(1));
-    WINDOW *win_input = subwin(stdscr, 3, 50, start_y, start_x);
-    box(win_input, 0, 0);
+    if (is_sel) attroff(A_REVERSE);
+}
+
+void pretty_print(Complex val, char *buf) {
+    if (val.r != val.r) { sprintf(buf, "Math Error"); return; } 
+
+    long n, d;
+    int is_frac = 0;
     
-    // Check for Error text to color it red
-    if (strstr(input_buffer, "Error") != NULL) wattron(win_input, COLOR_PAIR(3));
-    else wattron(win_input, COLOR_PAIR(1) | A_BOLD);
-    
-    mvwprintw(win_input, 1, 2, "%s", input_buffer);
-    wrefresh(win_input);
-    attroff(COLOR_PAIR(1));
-
-    int btn_height = 3;
-    int btn_width = 12; 
-    int inner_width = 10;
-    int grid_start_y = start_y + 4;
-
-    for (int i = 0; i < ROWS; i++) {
-        for (int j = 0; j < COLS; j++) {
-            int y = grid_start_y + (i * btn_height);
-            int x = start_x + (j * btn_width);
-
-            // Determine Color Pair
-            int pair = 1;
-            if (i == selected_row && j == selected_col) pair = 2;
-
-            attron(COLOR_PAIR(pair));
-            if (i == selected_row && j == selected_col) attron(A_BOLD);
-
-            mvprintw(y, x, "+----------+");
-            mvprintw(y+1, x, "|          |"); 
-
-            char *label = buttons[i][j];
-            int len = strlen(label);
-            int visual_len = len;
-            if (strcmp(label, "π") == 0) visual_len = 1;
-
-            int padding = (inner_width - visual_len) / 2;
-            mvprintw(y+1, x + 1 + padding, "%s", label);
-            mvprintw(y+2, x, "+----------+");
-
-            attroff(COLOR_PAIR(pair));
-            attroff(A_BOLD);
+    if (get_fraction_mode() && my_fabs(val.i) < 1e-9) {
+        if (to_fraction(val.r, &n, &d)) {
+            sprintf(buf, "%ld/%ld", n, d);
+            is_frac = 1;
         }
     }
+
+    if (!is_frac) {
+        if (my_fabs(val.i) < 1e-9) {
+            if (my_fabs(val.r - MY_PI) <= 1e-5) sprintf(buf, "π");
+            else if (my_fabs(val.r) < 1e-9) sprintf(buf, "0");
+            else sprintf(buf, "%.6g", val.r);
+        } 
+        else if (my_fabs(val.r) < 1e-9) {
+            if (my_fabs(val.i - 1.0) < 1e-9) sprintf(buf, "i");
+            else if (my_fabs(val.i + 1.0) < 1e-9) sprintf(buf, "-i");
+            else sprintf(buf, "%.6gi", val.i);
+        }
+        else {
+            sprintf(buf, "%.4g %c %.4gi", val.r, (val.i >= 0 ? '+' : '-'), my_fabs(val.i));
+        }
+    }
+}
+
+void draw_calc_mode(int sel_r, int sel_c) {
+    clear();
+    int h, w;
+    getmaxyx(stdscr, h, w);
+    int calc_width = 74; 
+    int calc_height = 29;
+    int start_y = (h - calc_height) / 2;
+    int start_x = (w - calc_width) / 2;
+
+    for(int i=-1; i<calc_height+1; i++) mvhline(start_y + i, start_x - 1, ' ', calc_width + 2);
+    box(stdscr, 0, 0); 
     
-    attron(COLOR_PAIR(1));
-    mvprintw(height - 2, 2, "ARROWS: Navigate | ENTER: Select | KEYBOARD: Type");
-    attroff(COLOR_PAIR(1));
+    attron(A_BOLD);
+    mvhline(start_y - 2, start_x, ' ', calc_width);
+    char title[100];
+    sprintf(title, " SCALC PRO | MODE: %s | VIEW: %s ", 
+            get_angle_mode() ? "DEG" : "RAD",
+            get_fraction_mode() ? "FRAC" : "DEC");
+    mvprintw(start_y - 2, start_x + (calc_width-strlen(title))/2, "%s", title);
+    attroff(A_BOLD);
+
+    WINDOW *win = subwin(stdscr, 3, calc_width, start_y, start_x);
+    box(win, 0, 0);
+    if (strstr(input_buffer, "Error")) wattron(win, A_BOLD);
+    else wattron(win, A_BOLD);
+    mvwprintw(win, 1, 2, "%s", input_buffer);
+    wattroff(win, A_BOLD);
+    wrefresh(win);
+
+    int btn_h = 3;
+    int btn_w = 12; 
+
+    for(int i=0; i<ROWS; i++) {
+        for(int j=0; j<COLS; j++) {
+            char *label = calc_buttons[i][j];
+            if (strlen(label) == 0 && !(i==7 && j==5)) continue; 
+            if (strcmp(label, "DRG") == 0) label = get_angle_mode() ? "DEG" : "RAD";
+
+            int y = start_y + 4 + (i * btn_h);
+            int x = start_x + (j * btn_w);
+            int is_sel = (i == sel_r && j == sel_c);
+            
+            if (i == 6 && j == 5) {
+                draw_button_box(y, x, 6, btn_w, "=", is_sel);
+                continue;
+            }
+            if (i == 7 && j == 5) continue;
+
+            draw_button_box(y, x, btn_h, btn_w, label, is_sel);
+        }
+    }
     refresh();
 }
 
-void pretty_print_result(double val, char *buffer) {
-    if (fabs(val - M_PI) <= 0.00001) { strcpy(buffer, "π"); return; }
-    if (fabs(val - (-M_PI)) <= 0.00001) { strcpy(buffer, "-π"); return; }
+void draw_solve_menu(int selected_item) {
+    clear();
+    attron(A_BOLD);
+    mvhline(2, 5, ' ', 60);
+    mvprintw(2, 25, " SOLVER & CONVERTER ");
+    attroff(A_BOLD);
 
-    if (val == 0.0 || (fabs(val) >= 0.0001 && fabs(val) < 1000000000000.0)) {
-        sprintf(buffer, "%.10g", val); 
-        return;
+    for (int i=0; i<6; i++) {
+        if (i == selected_item) attron(A_REVERSE);
+        mvprintw(5+i, 5, "%s", menu_options[i]);
+        if (i == selected_item) attroff(A_REVERSE);
     }
-
-    char temp[64];
-    sprintf(temp, "%.4e", val); 
     
-    char *e_pos = strchr(temp, 'e');
-    if (e_pos) {
-        *e_pos = '\0'; 
-        char *ptr = e_pos - 1;
-        while (*ptr == '0') { *ptr = '\0'; ptr--; }
-        if (*ptr == '.') *ptr = '\0';
-        int exp_val = atoi(e_pos + 1);
-        sprintf(buffer, "%s x 10^%d", temp, exp_val);
-    } else {
-        strcpy(buffer, temp);
-    }
+    mvprintw(14, 5, "[ Use ARROWS to select, ENTER to confirm ]");
+    refresh();
 }
 
-void perform_calculation() {
-    double result = evaluate_expression(input_buffer);
-    set_last_answer(result); 
-
-    if (isnan(result) || isinf(result) || fabs(result) > MAX_VAL) {
-        sprintf(input_buffer, "Math Error");
+void do_calc() {
+    if (strcasecmp(input_buffer, "exit") == 0 || strcasecmp(input_buffer, "quit") == 0) {
+        endwin(); exit(0);
     }
+    if (strlen(input_buffer)==0 || strchr("*/^", input_buffer[0])) return;
+    
+    const char* err = get_global_error();
+    if (strlen(err) > 0) sprintf(input_buffer, "%s", err);
     else {
-        pretty_print_result(result, input_buffer);
+        Complex res = evaluate_expression(input_buffer);
+        pretty_print(res, input_buffer);
+        set_last_answer(res);
     }
     result_is_displayed = 1;
 }
 
-int is_function(const char *btn) {
-    return (strcmp(btn, "sin") == 0 || strcmp(btn, "cos") == 0 || 
-            strcmp(btn, "tan") == 0 || strcmp(btn, "log") == 0 || 
-            strcmp(btn, "ln") == 0  || strcmp(btn, "sqrt") == 0 ||
-            strcmp(btn, "acos") == 0 || strcmp(btn, "asin") == 0 ||
-            strcmp(btn, "atan") == 0 || strcmp(btn, "exp") == 0);
-}
-
-void handle_input(const char *input_str) {
-    if (result_is_displayed) {
-        if (strcmp(input_str, "+") == 0 || strcmp(input_str, "-") == 0 ||
-            strcmp(input_str, "*") == 0 || strcmp(input_str, "/") == 0 ||
-            strcmp(input_str, "^") == 0 || strcmp(input_str, "!") == 0) {
-            
-            if (strcmp(input_buffer, "Math Error") == 0) {
-                input_buffer[0] = '\0';
-                strcat(input_buffer, input_str);
-            } else {
-                strcat(input_buffer, input_str);
-            }
-        } 
-        else {
-            input_buffer[0] = '\0';
-            strcat(input_buffer, input_str);
-        }
-        result_is_displayed = 0; 
-    } else {
-        if (strcmp(input_buffer, "Math Error") == 0) {
-            input_buffer[0] = '\0';
-        }
-        strcat(input_buffer, input_str);
-    }
-}
-
 int main() {
     setlocale(LC_ALL, ""); 
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(0);
-    
-    // INIT COLORS
-    if (has_colors()) {
-        init_colors();
-    }
+    initscr(); cbreak(); noecho(); keypad(stdscr, TRUE); curs_set(0);
+    init_theme();
 
-    int row = 0;
-    int col = 0;
-    int ch;
+    int row=0, col=0, ch;
+    double a,b,c_val,d; 
+    char temp_str[100]; 
 
-    while (1) {
-        draw_calculator(row, col);
-        ch = getch();
-
-        if (ch == KEY_UP && row > 0) row--;
-        else if (ch == KEY_DOWN && row < ROWS - 1) row++;
-        else if (ch == KEY_LEFT && col > 0) col--;
-        else if (ch == KEY_RIGHT && col < COLS - 1) col++;
-        else if (ch == 'q' || ch == 27) break;
-
-        else if (ch == 10) { 
-            char *btn = buttons[row][col];
+    while(1) {
+        if (current_mode == 0) {
+            draw_calc_mode(row, col);
+            ch = getch();
+            if (ch == KEY_UP && row > 0) row--;
+            else if (ch == KEY_DOWN) { if (row < ROWS-1) { row++; if (row == 7 && col == 5) row = 6; } }
+            else if (ch == KEY_LEFT && col > 0) col--;
+            else if (ch == KEY_RIGHT && col < COLS-1) col++;
+            else if (ch == 10) { 
+                int r = (row == 7 && col == 5) ? 6 : row;
+                char *btn = calc_buttons[r][col];
+                if (strcmp(btn, "=")==0) do_calc();
+                else if (strcmp(btn, "C")==0) { clear_global_error(); input_buffer[0]=0; result_is_displayed=0; }
+                else if (strcmp(btn, "EXIT")==0) break;
+                else if (strcmp(btn, "SOLVE")==0) current_mode = 1; 
+                else if (strcmp(btn, "DRG")==0) toggle_angle_mode(); 
+                else if (strcmp(btn, "F<>D")==0) { 
+                    toggle_fraction_mode(); 
+                    if (result_is_displayed) do_calc();
+                }
+                else if (strcmp(btn, "DEL")==0) { int l=strlen(input_buffer); if(l>0) input_buffer[l-1]=0; }
+                else {
+                    if (result_is_displayed && strchr("+-*/^", btn[0])==NULL) input_buffer[0]=0;
+                    if (strstr(input_buffer, "Error")) input_buffer[0] = '\0';
+                    result_is_displayed = 0;
+                    if (strcmp(btn,"sqr")==0) strcat(input_buffer, "^2");
+                    else if (strcmp(btn,"inv")==0) strcat(input_buffer, "^-1");
+                    else if (strcmp(btn,"10^x")==0) strcat(input_buffer, "10^");
+                    else if (strcmp(btn,"mod")==0) strcat(input_buffer, "%");
+                    else if (strcmp(btn,"nRt")==0) strcat(input_buffer, "nRt(");
+                    else {
+                        strcat(input_buffer, btn);
+                        if (isalpha(btn[0]) && strcmp(btn,"ANS")!=0 && strcmp(btn,"nRt")!=0 
+                            && strcmp(btn,"i")!=0 && strcmp(btn,"e")!=0 && strcmp(btn,"mod")!=0) 
+                            strcat(input_buffer, "(");
+                    }
+                }
+            }
+            else if (ch == '=') do_calc();
+            else if (ch == 'm' || ch == 'M') current_mode = 1;
+            else if (ch == 127 || ch == KEY_BACKSPACE) { int l=strlen(input_buffer); if(l>0) input_buffer[l-1]=0; }
+            else if (ch >= 32 && ch <= 126) {
+                if (result_is_displayed && strchr("+-*/^", ch)==NULL) input_buffer[0]=0;
+                if (strstr(input_buffer, "Error")) input_buffer[0] = '\0';
+                result_is_displayed=0;
+                int l=strlen(input_buffer); input_buffer[l]=ch; input_buffer[l+1]=0;
+            }
+        }
+        else if (current_mode == 1) { 
+            draw_solve_menu(menu_sel);
+            ch = getch();
             
-            if (strcmp(btn, "=") == 0) perform_calculation();
-            else if (strcmp(btn, "C") == 0) {
-                input_buffer[0] = '\0';
-                result_is_displayed = 0;
+            if (ch == KEY_UP) {
+                menu_sel--;
+                if (menu_sel < 0) menu_sel = 5;
             }
-            else {
-                handle_input(btn);
-                if (is_function(btn)) strcat(input_buffer, "(");
+            else if (ch == KEY_DOWN) {
+                menu_sel++;
+                if (menu_sel > 5) menu_sel = 0;
             }
-        }
-        else if (ch == '=') perform_calculation();
-        else if (ch == KEY_BACKSPACE || ch == 127) {
-            if (result_is_displayed) {
-                input_buffer[0] = '\0';
-                result_is_displayed = 0;
-            } else {
-                int len = strlen(input_buffer);
-                if (len > 0) input_buffer[len - 1] = '\0';
+            else if (ch == 'm' || ch == 'M') current_mode = 0;
+            else if (ch == 10) { 
+                int choice = menu_sel + 1;
+                echo(); curs_set(1); clear();
+                if (choice==1) {
+                    mvprintw(2,2,"SOLVING: ax + b = 0"); 
+                    mvprintw(4,2,"Enter a: "); scanw("%lf", &a);
+                    mvprintw(5,2,"Enter b: "); scanw("%lf", &b);
+                    solve_linear(a, b, input_buffer);
+                } else if (choice==2) {
+                    mvprintw(2,2,"SOLVING: Quadratic");
+                    mvprintw(4,2,"Enter a: "); scanw("%lf", &a);
+                    mvprintw(5,2,"Enter b: "); scanw("%lf", &b);
+                    mvprintw(6,2,"Enter c: "); scanw("%lf", &c_val);
+                    solve_quadratic(a, b, c_val, input_buffer);
+                } else if (choice==3) {
+                    mvprintw(2,2,"SOLVING: Cubic");
+                    mvprintw(4,2,"Enter a: "); scanw("%lf", &a);
+                    mvprintw(5,2,"Enter b: "); scanw("%lf", &b);
+                    mvprintw(6,2,"Enter c: "); scanw("%lf", &c_val);
+                    mvprintw(7,2,"Enter d: "); scanw("%lf", &d);
+                    solve_cubic(a, b, c_val, d, input_buffer);
+                } else if (choice==4) {
+                    mvprintw(2,2,"Deg -> Rad (Supports math input)");
+                    mvprintw(4,2,"Enter Degrees: "); 
+                    wgetnstr(stdscr, temp_str, 99);
+                    Complex res = evaluate_expression(temp_str);
+                    double val = res.r; 
+                    double factor = val / 180.0;
+                    if (factor == 1.0) sprintf(input_buffer, "π");
+                    else if (factor == -1.0) sprintf(input_buffer, "-π");
+                    else if (factor == 0.0) sprintf(input_buffer, "0");
+                    else sprintf(input_buffer, "%.6gπ", factor);
+                } else if (choice==5) {
+                    mvprintw(2,2,"Rad -> Deg (Supports 'pi')");
+                    mvprintw(4,2,"Enter Radians: "); 
+                    wgetnstr(stdscr, temp_str, 99);
+                    Complex res = evaluate_expression(temp_str);
+                    double val = res.r;
+                    double deg = val * (180.0/MY_PI);
+                    sprintf(input_buffer, "%.6g deg", deg);
+                } else if (choice==6) {
+                    // back
+                }
+                noecho(); curs_set(0); current_mode=0; 
             }
-        }
-        else if (ch >= 32 && ch <= 126) {
-            char temp[2] = {ch, '\0'};
-            handle_input(temp);
         }
     }
-
     endwin();
     return 0;
 }
